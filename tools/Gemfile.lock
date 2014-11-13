@@ -1,9 +1,9 @@
 GEM
   remote: https://www.rubygems.org/
   specs:
-    dogstatsd-ruby (1.2.0)
+    dogstatsd-ruby (1.4.1)
     hiredis (0.5.2)
-    redis (3.0.7)
+    redis (3.1.0)
 
 PLATFORMS
   ruby

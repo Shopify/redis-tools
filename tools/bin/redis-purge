@@ -1,0 +1,41 @@
+#!/usr/bin/env ruby
+
+$LOAD_PATH << File.dirname(File.realpath(__FILE__)) + "/../lib"
+require 'redis_tool'
+
+class RedisPurge < RedisTool
+  CHUNK_SIZE = 1000
+
+  def initialize(*args)
+    super(*args)
+    @key_pattern = nil
+  end
+
+  protected
+
+  def run_wrapped
+
+    #0.upto(10000) do |i|
+      #key = %w[alpha beta charlie delta echo].sample
+      #@redis.set("#{key}:#{i}", i)
+    #end
+
+
+    cursor = 0
+    @last_progress = Time.now
+    loop do
+      cursor, collection = @redis.scan(cursor, match: 'beta*', count: CHUNK_SIZE)
+
+      collection.each do |key|
+        log("delete", key: key)
+        @redis.del(key)
+      end
+
+      break if cursor == "0"
+    end
+  end
+
+end
+
+RedisPurge.from_argv(*ARGV).run
+
