@@ -1,0 +1,85 @@
+#!/usr/bin/env ruby
+
+$LOAD_PATH << File.dirname(File.realpath(__FILE__)) + "/../lib"
+require 'redis_tool'
+require 'timeout'
+
+class RedisProbe < RedisTool
+  CHUNK_SIZE = 1000
+
+  def initialize(*args)
+    super(*args)
+    @time = 2
+    @lines          = Hash.new { |hash, key| hash[key] = 0 }
+    @large_key      = Hash.new { |hash, key| hash[key] = 0 }
+    @large_payload  = Hash.new { |hash, key| hash[key] = 0 }
+    @commands       = Hash.new { |hash, key| hash[key] = 0 }
+    @dump = File.open('dump.txt', 'w')
+  end
+
+  protected
+
+  def run_wrapped
+    begin
+      Timeout::timeout(@time) do
+        @redis.monitor do |line|
+          @dump.puts line
+          next if line == 'OK'
+          # 1415698712.700165 [0 lua] "lrange" "elasticsearch:queue:4" "-200" "-1"
+          time, duration, source, command, key, *args = parse(line)
+          @lines[line] +=1
+          @large_key[key] +=1 unless key.nil?
+          @large_payload[args] +=1 if args.join.size > 1_000 unless args.nil?
+          @command[command] += 1
+        end
+      end
+    rescue Timeout::Error; end
+    finalize
+  ensure
+    @dump.close if @dump
+
+  end
+
+  def parse(line)
+    line.split.map { |token| token.gsub(/^"|^\[/, '').gsub(/"$|\]$/, '') }
+  rescue
+    puts "this is broken #{line}"
+    ""
+  end
+
+  def gets
+    line = STDIN.gets
+    @dump.puts line
+    line.chomp.scrub
+  rescue
+    puts "this is broken UTF-8 #{line}"
+    ""
+  end
+
+  def finalize
+    puts "most called"
+    # @lines.
+    #   sort_by { |_, count| count }.
+    #   last(25).
+    #   each { |key, count| printf("%5d %s\n", count, key) }
+
+    # puts "largest payload"
+    # @large_payload.
+    #   sort_by { |_, count| count }.
+    #   last(25).
+    #   each { |key, count| printf("%5d %s\n", count, key) }
+
+    puts "largest keys"
+    @large_key.
+      sort_by { |_, count| count }.
+      last(125).
+      each { |key, count| printf("%5d %s\n", count, key) }
+
+    puts " keys"
+    pp @commands.inspect
+  end
+
+
+end
+
+RedisProbe.from_argv(*ARGV).run
