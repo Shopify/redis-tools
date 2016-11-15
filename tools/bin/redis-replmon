@@ -33,7 +33,6 @@ class RedisReplicationMonitor
     @name   = inst_name
     @vip    = instance["vip"]    or failure "No VIP configured"
     @port   = instance["port"]   or failure "No port configured"
-    @nodes  = instance["nodes"]  or failure "No nodes configured"
     @slaves = instance["slaves"] or failure "No slave count configured"
 
     @statsd = Statsd.new
@@ -70,18 +69,12 @@ class RedisReplicationMonitor
       slave = Hash[value.split(',').map { |field| field.split('=', 2) }]
       slave_addr = "#{slave['ip']}:#{slave['port']}"
 
-      known_slave = @nodes.include?(slave['ip']) && slave['port'].to_i == @port
-
-      opts = {:tags => ["slave:#{slave_addr}", "known:#{known_slave}"]}
+      opts = {:tags => ["slave:#{slave_addr}"]}
       @statsd.gauge('redis.replmon.slave.lag', slave['lag'], opts)
       @statsd.gauge('redis.replmon.slave.offset', slave['offset'].to_i, opts)
       @statsd.gauge('redis.replmon.slave.offset.delta', master_offset - slave['offset'].to_i, opts)
 
-      if known_slave
-        slave_count += 1 if slave['state'] == 'online'
-      else
-        notice "Unknown slave: #{slave_addr}"
-      end
+      slave_count += 1 if slave['state'] == 'online'
     end
 
     return slave_count if @slaves == slave_count
